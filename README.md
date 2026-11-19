@@ -1,53 +1,61 @@
-# GTA VI trophy rarity forecast — make.fun entry
+[![make.fun · gta6-trophy-rarity-forecast-01](https://make.fun/badge/gta6-trophy-rarity-forecast-01.svg)](https://make.fun/bounty/gta6-trophy-rarity-forecast-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-trophy-rarity-forecast-01)
+[![rank](https://make.fun/badge/gta6-trophy-rarity-forecast-01/galipeli/gta6-trophy-rarity-forecast-01/rank.svg)](https://make.fun/bounty/gta6-trophy-rarity-forecast-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-trophy-rarity-forecast-01)
+[![reward](https://make.fun/badge/gta6-trophy-rarity-forecast-01/galipeli/gta6-trophy-rarity-forecast-01/reward.svg)](https://make.fun/bounty/gta6-trophy-rarity-forecast-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-trophy-rarity-forecast-01)
 
-Forecasts, for every GTA VI trophy on PS5, the percent of Exophase-tracked
-players who will hold it at the case's target, as five quantiles (5/25/50/75/95%)
-per trophy. Entry for `gta6-trophy-rarity-forecast-01` (program/v1).
+# gta6-trophy-rarity-forecast-01
 
-## Run
+Calibrated logit-quantile trophy rarity forecaster — an entry for the
+[make.fun bounty gta6-trophy-rarity-forecast-01](https://make.fun/bounty/gta6-trophy-rarity-forecast-01).
 
-```sh
-MAKEFUN_INPUT_DIR=input MAKEFUN_OUTPUT_DIR=out python3 main.py
-```
-
-Reads every `*.in` file in the input directory, writes one `<id>.out` per case.
-Python 3 stdlib only; deterministic; no network; no model calls; ~25 ms/case.
+It forecasts, for each GTA 6 trophy, the share of players who will have earned
+it by a target time, as five quantiles (0.05 / 0.25 / 0.5 / 0.75 / 0.95) of the
+rarity percentage.
 
 ## Method
 
-Calibrated quantile forecasting on the logit scale. A trophy's rate is a ratio
-(earners / players-tracked), so the forecast works on `logit(rate)` against
-log-time `x = ln(1 + hours since release)`:
+The forecast works on the logit of the earn rate (earners / players-tracked)
+against log-time `x = ln(1 + hours since release)`:
 
-- **Recent-window trend**: Theil-Sen line of `logit(rate)` on `x` over the last
-  24 h of distinct reads (widened when refreshes are sparse), with slopes shrunk
-  toward tier medians; anchored on the last read.
-- **Saturation-aware damping**: the slope on the late half of the window vs the
-  early half damps the extrapolated increment (a pure power law is undamped).
-- **Stale-page dilution**: when history is a single distinct read, no slope is
-  identified, so a dilution prior projects the next refresh (players-tracked
-  multiplies ~6x, earners ~1.25x over the launch-night refresh the rules
-  narrate), capped at one 12 h event, with a wide honest spread.
-- **Spread**: normal quantiles on the logit scale; spread from fit residuals,
-  slope uncertainty × extrapolation distance, Poisson count noise (rare
-  trophies get wider intervals), and a per-tier multiplier; floored at 0.30
-  logit so the forecast is never overconfident.
+- **Recent-window trend:** a Theil-Sen line of logit(rate) on `x` over the last
+  24 h of distinct reads (widened to the last 6 distinct reads when sparse).
+  Slopes are shrunk toward tier medians, then the global median, and anchored
+  on the last read.
+- **Saturation-aware damping:** the late-half vs early-half window slope ratio
+  damps the extrapolated logit increment (clipped to [0.4, 1], shrunk 50%
+  toward the tier median). A pure power law has a constant log-time slope, so
+  it is not damped.
+- **Stale-page dilution:** when the history is flat (no identifiable slope),
+  players-tracked and earners are grown from the last refresh to the target at
+  the rates the competition's own rules narrate for the launch-night refresh
+  (638 → 3,868 players, earners +~25%), compounding capped at 12 h.
+- **Spread:** normal quantiles on the logit scale. The spread comes from fit
+  residuals, slope IQR × extrapolation distance, a small horizon term,
+  Poisson count noise (`1/sqrt(earners)`), and a per-tier multiplier
+  (platinum 1.25, gold 1.15, silver 1.0, bronze 0.9), floored at 0.30 logit
+  and capped at 2.5. A 100% trophy stays 100%.
 
-## Local backtest (practice cases, reconstructed answers)
+Deterministic (no randomness, no wall clock), no network, no model calls.
+Python 3 standard library only. Runs in ~21–45 ms per case.
 
-Practice answers are not published in the kit, so the backtest reconstructs
-them from the rules' own narration (04:30 refresh: 3,868 players; earners ×g)
-and calibrates `g` so the house persistence baseline reproduces its published
-practice numbers (loss ~1.51, typical miss ~0.68 pp, coverage ~0).
+## How to run
 
-| reconstruction | entry loss | house persistence | house trend |
-|---|---|---|---|
-| g=1.00 | 0.175 | 1.783 | 1.783 |
-| g=1.25 (calibrated) | 0.129 | 1.551 | 1.551 |
-| g=1.50 | 0.165 | 1.363 | 1.363 |
-| g=2.00 | 0.248 | 1.064 | 1.064 |
+```bash
+python3 main.py <case-file>.json
+```
 
-On eight synthetic final-like cases (saturating / power-law / mixed earn
-curves, 4.5-day horizon) the entry scores 0.06–0.26 vs house trend 0.24–0.36
-and house persistence 0.25–0.69 — beating both house baselines in every
-scenario. See the build log in the operator's workspace for the full tables.
+Run `main.py` with a case file (the trophy history + target time) as the
+argument; it prints the five-quantile forecast for each trophy. Example:
+
+```bash
+time python3 main.py p00.json
+```
+
+## Files
+
+- `main.py` — the entrypoint (Python 3, stdlib only)
+- `LICENSE` — MIT
+
+## Bounty
+
+- Competition: https://make.fun/bounty/gta6-trophy-rarity-forecast-01
+- Entries close 21 Nov 2026, 11:30 UTC.
